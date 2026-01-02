@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>美語單字左右對戰</title>
+    <title>美語單字左右對戰 (修正版)</title>
     <style>
         :root {
-            --p1-bg: #e3f2fd; --p1-color: #1565c0;
-            --p2-bg: #ffebee; --p2-color: #c62828;
+            --p1-bg: #e3f2fd; --p1-dark: #1565c0;
+            --p2-bg: #fff3e0; --p2-dark: #e65100; /* P2 改為橘色系，對比更清晰 */
         }
         body, html {
             margin: 0; padding: 0; height: 100%; width: 100%;
             overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #333; touch-action: none; /* 禁止瀏覽器預設手勢 */
+            background: #222; 
+            touch-action: none; /* 禁止瀏覽器預設手勢 */
+            user-select: none;  /* 禁止選取文字 */
         }
 
         /* 主容器：左右分割 */
@@ -26,10 +28,10 @@
         .player-area {
             flex: 1; /* 各佔 50% 寬度 */
             display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 兩列單字卡 */
-            grid-template-rows: repeat(3, 1fr);    /* 三行單字卡 */
-            gap: 15px;
-            padding: 25px;
+            grid-template-columns: repeat(2, 1fr); /* 兩列 */
+            grid-template-rows: repeat(3, 1fr);    /* 三行 */
+            gap: 12px;
+            padding: 15px;
             align-items: center;
             justify-items: center;
             position: relative;
@@ -38,68 +40,92 @@
         /* 左側玩家 (P1) */
         #p1-area {
             background-color: var(--p1-bg);
-            border-right: 3px solid #555;
+            border-right: 2px solid #aaa;
         }
 
-        /* 右側玩家 (P2) - 關鍵修正：整個區域旋轉180度，面對P1 */
+        /* 右側玩家 (P2) - 已修正：移除旋轉，方向轉正 */
         #p2-area {
             background-color: var(--p2-bg);
-            transform: rotate(180deg); 
         }
 
         /* 單字卡片樣式 */
         .word-card {
-            width: 90%; height: 80%;
+            width: 90%; height: 85%;
             background: white;
-            border-radius: 12px;
+            border-radius: 15px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.8rem; font-weight: bold; color: #444;
-            box-shadow: 0 5px 0 #bbb;
-            cursor: pointer; user-select: none;
+            font-size: 1.6rem; font-weight: bold; color: #444;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+            cursor: pointer;
             transition: transform 0.1s;
             text-align: center;
             word-break: break-word;
+            border: 2px solid transparent; /* 預留邊框位置 */
         }
-        .word-card:active { transform: translateY(5px); box-shadow: 0 2px 0 #bbb; }
+        
+        .word-card:active { 
+            transform: scale(0.95); 
+            box-shadow: 0 2px 0 rgba(0,0,0,0.2); 
+        }
 
-        /* 答對/答錯回饋 */
-        .correct { background: #4caf50 !important; color: white !important; box-shadow: 0 5px 0 #2e7d32 !important; }
-        .wrong { background: #f44336 !important; color: white !important; animation: shake 0.3s; }
+        /* 狀態樣式 */
+        .correct { 
+            background: #66bb6a !important; 
+            color: white !important; 
+            border-color: #2e7d32 !important;
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .wrong { 
+            background: #ef5350 !important; 
+            color: white !important; 
+            animation: shake 0.4s;
+        }
 
-        /* 中央控制項 (浮在最上層) */
+        /* 中央控制項 */
         #center-ui {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            z-index: 999; display: flex; flex-direction: column; align-items: center;
-            pointer-events: none; /* 讓點擊穿透到下方遊戲區 */
+            z-index: 1000; 
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: none;
+            width: 100%;
         }
 
         /* 計分板 */
         .score-board {
-            background: rgba(0,0,0,0.85); color: white;
-            padding: 12px 30px; border-radius: 50px;
-            font-size: 1.5rem; font-weight: bold;
-            display: flex; gap: 30px;
-            border: 3px solid white;
+            background: #333; color: white;
+            padding: 10px 40px; border-radius: 50px;
+            font-size: 1.4rem; font-weight: bold;
+            display: flex; gap: 40px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 2px solid #fff;
         }
-        .p1-score { color: #90caf9; }
-        .p2-score { color: #ef9a9a; }
+        .p1-score { color: #64b5f6; }
+        .p2-score { color: #ffb74d; }
 
-        /* 播放按鈕 */
+        /* 喇叭按鈕 */
         #speaker-btn {
-            margin-top: 20px; width: 70px; height: 70px;
+            margin-top: 15px; width: 64px; height: 64px;
             background: white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 2rem; cursor: pointer;
-            box-shadow: 0 0 20px rgba(255,255,255,0.4);
-            pointer-events: auto; /* 啟用按鈕點擊 */
+            font-size: 1.8rem; cursor: pointer;
+            box-shadow: 0 0 15px rgba(255,255,255,0.6);
+            pointer-events: auto; /* 允許點擊 */
+            border: 4px solid #333;
         }
-        #speaker-btn:active { transform: scale(0.95); }
+        #speaker-btn:active { background: #eee; }
 
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-8px); }
-            75% { transform: translateX(8px); }
+            20% { transform: translateX(-6px) rotate(-2deg); }
+            40% { transform: translateX(6px) rotate(2deg); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
@@ -107,120 +133,126 @@
 
 <div id="game-container">
     <div id="p1-area" class="player-area"></div>
+    
     <div id="p2-area" class="player-area"></div>
 </div>
 
 <div id="center-ui">
     <div class="score-board">
         <span class="p1-score">P1: <span id="s1">0</span></span>
-        <span>VS</span>
         <span class="p2-score">P2: <span id="s2">0</span></span>
     </div>
     <div id="speaker-btn">🔊</div>
 </div>
 
 <script>
-    // 1. 單字庫設定 (可自行擴充)
+    // 單字資料庫 (可在此擴充)
     const vocabulary = [
-        {en: 'Apple', zh: '蘋果'}, {en: 'Banana', zh: '香蕉'},
-        {en: 'Orange', zh: '柳橙'}, {en: 'Grape', zh: '葡萄'},
-        {en: 'Watermelon', zh: '西瓜'}, {en: 'Strawberry', zh: '草莓'},
-        {en: 'Lemon', zh: '檸檬'}, {en: 'Peach', zh: '桃子'}
+        {en: 'Lion', zh: '獅子'}, {en: 'Tiger', zh: '老虎'},
+        {en: 'Zebra', zh: '斑馬'}, {en: 'Monkey', zh: '猴子'},
+        {en: 'Rabbit', zh: '兔子'}, {en: 'Panda', zh: '熊貓'},
+        {en: 'Snake', zh: '蛇'}, {en: 'Bear', zh: '熊'}
     ];
 
     let currentTarget = "";
     let scores = { p1: 0, p2: 0 };
-    let isProcessing = false; // 防止重複點擊
+    let isProcessing = false;
 
     const synth = window.speechSynthesis;
     const speakerBtn = document.getElementById('speaker-btn');
 
-    // 2. 語音播放功能
+    // 播放發音
     function speakWord() {
-        if (!currentTarget || synth.speaking) return;
+        if (!currentTarget) return;
+        
+        // 停止之前的發音，避免重疊
+        synth.cancel();
+
         const utter = new SpeechSynthesisUtterance(currentTarget);
         utter.lang = 'en-US';
-        utter.rate = 0.9; // 語速稍慢
+        utter.rate = 0.8; // 稍微放慢語速適合教學
         synth.speak(utter);
     }
 
-    // 3. 開始新回合
+    // 開始新的一局
     function newRound() {
         isProcessing = false;
-        // 隨機選擇一個目標單字
+        // 隨機選題
         currentTarget = vocabulary[Math.floor(Math.random() * vocabulary.length)].en;
         
-        // 渲染兩側區域
         renderCards('p1-area');
         renderCards('p2-area');
-
-        // 自動播放聲音 (延遲一點點以免切換太快聽不到)
-        setTimeout(speakWord, 600);
+        
+        // 延遲播放聲音
+        setTimeout(speakWord, 500);
     }
 
-    // 4. 渲染單字卡片
+    // 產生卡片
     function renderCards(areaId) {
         const container = document.getElementById(areaId);
         container.innerHTML = "";
         
-        // 隨機打亂單字順序
-        const shuffledList = [...vocabulary].sort(() => 0.5 - Math.random()).slice(0, 6); // 取前6個顯示
-
-        // 確保目標單字一定在列表中 (如果隨機沒取到的話)
-        const targetExists = shuffledList.some(item => item.en === currentTarget);
-        if (!targetExists) {
-            shuffledList[0] = vocabulary.find(item => item.en === currentTarget);
+        // 隨機取出 6 個單字 (含答案)
+        let options = [...vocabulary].sort(() => 0.5 - Math.random()).slice(0, 6);
+        
+        // 確保答案一定在選項中
+        if (!options.find(w => w.en === currentTarget)) {
+            options[0] = vocabulary.find(w => w.en === currentTarget);
         }
-        // 再次打亂以隱藏目標位置
-        shuffledList.sort(() => 0.5 - Math.random());
+        
+        // 再次打亂順序
+        options.sort(() => 0.5 - Math.random());
 
-        // 建立卡片 DOM
-        shuffledList.forEach(item => {
+        options.forEach(word => {
             const card = document.createElement('div');
             card.className = 'word-card';
-            card.innerText = item.en;
-            // 關鍵：使用 onpointerdown 支援多點觸控，並綁定檢查函式
-            card.onpointerdown = (e) => checkAnswer(item.en, areaId, e.currentTarget);
+            card.innerText = word.en;
+            
+            // 使用 pointerdown 確保多點觸控反應靈敏
+            card.onpointerdown = (e) => checkAnswer(word.en, areaId, e.currentTarget);
+            
             container.appendChild(card);
         });
     }
 
-    // 5. 檢查答案
-    function checkAnswer(selectedWord, areaId, cardElement) {
-        if (isProcessing) return; // 鎖定狀態不處理
+    // 檢查答案
+    function checkAnswer(selected, areaId, el) {
+        if (isProcessing) return; // 鎖定防止重複得分
 
-        if (selectedWord === currentTarget) {
-            // 答對了
-            isProcessing = true; // 鎖定，防止另一人同時得分
-            const winner = areaId === 'p1-area' ? 'p1' : 'p2';
-            scores[winner]++;
-            document.getElementById(winner === 'p1' ? 's1' : 's2').innerText = scores[winner];
+        if (selected === currentTarget) {
+            isProcessing = true;
+            el.classList.add('correct');
             
-            // 視覺回饋
-            cardElement.classList.add('correct');
+            // 得分邏輯
+            if (areaId === 'p1-area') scores.p1++; else scores.p2++;
+            updateScore();
             
-            // 1.5秒後下一題
-            setTimeout(newRound, 1500);
+            // 1.2秒後下一題
+            setTimeout(newRound, 1200);
         } else {
-            // 答錯了
-            cardElement.classList.add('wrong');
-            // 0.5秒後移除錯誤樣式
-            setTimeout(() => cardElement.classList.remove('wrong'), 500);
+            el.classList.add('wrong');
+            // 0.5秒後移除錯誤紅色
+            setTimeout(() => el.classList.remove('wrong'), 500);
         }
     }
 
-    // 事件綁定
+    function updateScore() {
+        document.getElementById('s1').innerText = scores.p1;
+        document.getElementById('s2').innerText = scores.p2;
+    }
+
+    // 綁定喇叭按鈕
     speakerBtn.onclick = speakWord;
 
-    // 點擊畫面任何地方開始遊戲 (僅第一次有效)
-    document.body.addEventListener('pointerdown', function startGame() {
-        speakerBtn.innerText = "🔊"; // 改變圖示提示已開始
+    // 第一次點擊畫面啟動遊戲 (瀏覽器需要使用者互動才能播放聲音)
+    document.body.addEventListener('pointerdown', function start() {
+        speakerBtn.innerText = "🔊";
         newRound();
-        document.body.removeEventListener('pointerdown', startGame);
+        document.body.removeEventListener('pointerdown', start);
     }, { once: true });
 
-    // 初始提示
-    speakerBtn.innerText = "點擊開始";
+    // 初始文字
+    speakerBtn.innerText = "GO";
 
 </script>
 </body>
