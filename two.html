@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>美語單字左右對戰</title>
+    <style>
+        :root {
+            --p1-bg: #e3f2fd; --p1-color: #1565c0;
+            --p2-bg: #ffebee; --p2-color: #c62828;
+        }
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #333; touch-action: none; /* 禁止瀏覽器預設手勢 */
+        }
+
+        /* 主容器：左右分割 */
+        #game-container {
+            display: flex;
+            flex-direction: row; /* 左右排列 */
+            height: 100%; width: 100%;
+        }
+
+        /* 玩家區域通用樣式 */
+        .player-area {
+            flex: 1; /* 各佔 50% 寬度 */
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* 兩列單字卡 */
+            grid-template-rows: repeat(3, 1fr);    /* 三行單字卡 */
+            gap: 15px;
+            padding: 25px;
+            align-items: center;
+            justify-items: center;
+            position: relative;
+        }
+
+        /* 左側玩家 (P1) */
+        #p1-area {
+            background-color: var(--p1-bg);
+            border-right: 3px solid #555;
+        }
+
+        /* 右側玩家 (P2) - 關鍵修正：整個區域旋轉180度，面對P1 */
+        #p2-area {
+            background-color: var(--p2-bg);
+            transform: rotate(180deg); 
+        }
+
+        /* 單字卡片樣式 */
+        .word-card {
+            width: 90%; height: 80%;
+            background: white;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; font-weight: bold; color: #444;
+            box-shadow: 0 5px 0 #bbb;
+            cursor: pointer; user-select: none;
+            transition: transform 0.1s;
+            text-align: center;
+            word-break: break-word;
+        }
+        .word-card:active { transform: translateY(5px); box-shadow: 0 2px 0 #bbb; }
+
+        /* 答對/答錯回饋 */
+        .correct { background: #4caf50 !important; color: white !important; box-shadow: 0 5px 0 #2e7d32 !important; }
+        .wrong { background: #f44336 !important; color: white !important; animation: shake 0.3s; }
+
+        /* 中央控制項 (浮在最上層) */
+        #center-ui {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999; display: flex; flex-direction: column; align-items: center;
+            pointer-events: none; /* 讓點擊穿透到下方遊戲區 */
+        }
+
+        /* 計分板 */
+        .score-board {
+            background: rgba(0,0,0,0.85); color: white;
+            padding: 12px 30px; border-radius: 50px;
+            font-size: 1.5rem; font-weight: bold;
+            display: flex; gap: 30px;
+            border: 3px solid white;
+        }
+        .p1-score { color: #90caf9; }
+        .p2-score { color: #ef9a9a; }
+
+        /* 播放按鈕 */
+        #speaker-btn {
+            margin-top: 20px; width: 70px; height: 70px;
+            background: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; cursor: pointer;
+            box-shadow: 0 0 20px rgba(255,255,255,0.4);
+            pointer-events: auto; /* 啟用按鈕點擊 */
+        }
+        #speaker-btn:active { transform: scale(0.95); }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="p1-area" class="player-area"></div>
+    <div id="p2-area" class="player-area"></div>
+</div>
+
+<div id="center-ui">
+    <div class="score-board">
+        <span class="p1-score">P1: <span id="s1">0</span></span>
+        <span>VS</span>
+        <span class="p2-score">P2: <span id="s2">0</span></span>
+    </div>
+    <div id="speaker-btn">🔊</div>
+</div>
+
+<script>
+    // 1. 單字庫設定 (可自行擴充)
+    const vocabulary = [
+        {en: 'Apple', zh: '蘋果'}, {en: 'Banana', zh: '香蕉'},
+        {en: 'Orange', zh: '柳橙'}, {en: 'Grape', zh: '葡萄'},
+        {en: 'Watermelon', zh: '西瓜'}, {en: 'Strawberry', zh: '草莓'},
+        {en: 'Lemon', zh: '檸檬'}, {en: 'Peach', zh: '桃子'}
+    ];
+
+    let currentTarget = "";
+    let scores = { p1: 0, p2: 0 };
+    let isProcessing = false; // 防止重複點擊
+
+    const synth = window.speechSynthesis;
+    const speakerBtn = document.getElementById('speaker-btn');
+
+    // 2. 語音播放功能
+    function speakWord() {
+        if (!currentTarget || synth.speaking) return;
+        const utter = new SpeechSynthesisUtterance(currentTarget);
+        utter.lang = 'en-US';
+        utter.rate = 0.9; // 語速稍慢
+        synth.speak(utter);
+    }
+
+    // 3. 開始新回合
+    function newRound() {
+        isProcessing = false;
+        // 隨機選擇一個目標單字
+        currentTarget = vocabulary[Math.floor(Math.random() * vocabulary.length)].en;
+        
+        // 渲染兩側區域
+        renderCards('p1-area');
+        renderCards('p2-area');
+
+        // 自動播放聲音 (延遲一點點以免切換太快聽不到)
+        setTimeout(speakWord, 600);
+    }
+
+    // 4. 渲染單字卡片
+    function renderCards(areaId) {
+        const container = document.getElementById(areaId);
+        container.innerHTML = "";
+        
+        // 隨機打亂單字順序
+        const shuffledList = [...vocabulary].sort(() => 0.5 - Math.random()).slice(0, 6); // 取前6個顯示
+
+        // 確保目標單字一定在列表中 (如果隨機沒取到的話)
+        const targetExists = shuffledList.some(item => item.en === currentTarget);
+        if (!targetExists) {
+            shuffledList[0] = vocabulary.find(item => item.en === currentTarget);
+        }
+        // 再次打亂以隱藏目標位置
+        shuffledList.sort(() => 0.5 - Math.random());
+
+        // 建立卡片 DOM
+        shuffledList.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'word-card';
+            card.innerText = item.en;
+            // 關鍵：使用 onpointerdown 支援多點觸控，並綁定檢查函式
+            card.onpointerdown = (e) => checkAnswer(item.en, areaId, e.currentTarget);
+            container.appendChild(card);
+        });
+    }
+
+    // 5. 檢查答案
+    function checkAnswer(selectedWord, areaId, cardElement) {
+        if (isProcessing) return; // 鎖定狀態不處理
+
+        if (selectedWord === currentTarget) {
+            // 答對了
+            isProcessing = true; // 鎖定，防止另一人同時得分
+            const winner = areaId === 'p1-area' ? 'p1' : 'p2';
+            scores[winner]++;
+            document.getElementById(winner === 'p1' ? 's1' : 's2').innerText = scores[winner];
+            
+            // 視覺回饋
+            cardElement.classList.add('correct');
+            
+            // 1.5秒後下一題
+            setTimeout(newRound, 1500);
+        } else {
+            // 答錯了
+            cardElement.classList.add('wrong');
+            // 0.5秒後移除錯誤樣式
+            setTimeout(() => cardElement.classList.remove('wrong'), 500);
+        }
+    }
+
+    // 事件綁定
+    speakerBtn.onclick = speakWord;
+
+    // 點擊畫面任何地方開始遊戲 (僅第一次有效)
+    document.body.addEventListener('pointerdown', function startGame() {
+        speakerBtn.innerText = "🔊"; // 改變圖示提示已開始
+        newRound();
+        document.body.removeEventListener('pointerdown', startGame);
+    }, { once: true });
+
+    // 初始提示
+    speakerBtn.innerText = "點擊開始";
+
+</script>
+</body>
+</html>
