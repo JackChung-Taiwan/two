@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>聽力對戰（1-4人｜4-20回）</title>
+<title>聽力對戰（修正模式）</title>
 
 <style>
 :root{
@@ -161,7 +161,13 @@ body{
 }
 
 .correct{ background: var(--pop-green) !important; color:#fff !important; }
-.wrong{ background: var(--pop-red) !important; color:#fff !important; animation:shake .25s; }
+.wrong{ 
+  background: var(--pop-red) !important; 
+  color:#fff !important; 
+  animation:shake .25s; 
+  opacity: 0.6; /* 變暗 */
+  pointer-events: none; /* 答錯的選項不能再點 */
+}
 
 /* ✅ 顯示正確答案：亮框 */
 .reveal-correct{
@@ -318,7 +324,6 @@ body{
       <select id="roundSelect"></select>
     </div>
 
-    <!-- ✅ 自動下一題模式（預設：全員作答就下一題） -->
     <div class="pill" title="自動下一題條件">
       <label for="autoSelect">自動</label>
       <select id="autoSelect">
@@ -339,7 +344,6 @@ body{
   <div class="battle-ground" id="battleGround"></div>
 </div>
 
-<!-- 題庫設定 -->
 <div class="overlay" id="configOverlay">
   <div class="comic-box modal">
     <h2>題庫設定</h2>
@@ -357,14 +361,12 @@ body{
     </div>
 
     <div style="margin-top:10px; font-size:14px; font-weight:900; color:#334155;">
-      規則：每題固定 4 選項；每隊每題只能點一次。<br>
-      計分：每題第 1 個答對 +10、第 2 個 +8、第 3 個 +6、第 4 個 +4。<br>
-      顯示答案：題目結束時會亮框標示正確選項。
+      規則：每題第 1 個答對 +10、第 2 個 +8...<br>
+      <span style="color:#ef4444;">新規則：答錯可繼續選（扣2分），但之後選對不加分（僅算完成）。</span>
     </div>
   </div>
 </div>
 
-<!-- 結果排行 -->
 <div class="overlay" id="resultOverlay">
   <div class="comic-box modal">
     <h2 style="font-size:28px;">🎉 比賽結束！排行榜</h2>
@@ -380,10 +382,10 @@ body{
 
 <script>
 /* ================== 參數 ================== */
-let TOTAL_QUESTIONS = 4;           // 可自訂（4~20）
-const OPTIONS_PER_QUESTION = 4;    // 每題 4 選項
-const RACE_POINTS = [10, 8, 6, 4]; // 搶答名次分
-const AUTO_DELAY_MS = 900;         // 自動下一題延遲
+let TOTAL_QUESTIONS = 4;
+const OPTIONS_PER_QUESTION = 4;
+const RACE_POINTS = [10, 8, 6, 4]; 
+const AUTO_DELAY_MS = 900;
 
 /* ================== 題庫 ================== */
 const DEFAULT_WORDS = ["Apple","Banana","Cat","Dog","Car","Fish","Sun","Moon","Book","Bird","Lion","Milk"];
@@ -400,11 +402,12 @@ let gameEnded = false;
 // 本題搶答名次
 let correctRank = 0;
 
-// 每題：哪些隊已作答（不管對錯都鎖）
+// 每題：哪些隊已「完成」（答對才算完成並鎖定）
 let answeredTeams = new Set();
+// 每題：哪些隊已經「失誤過」（失誤過的人答對不加分）
+let missedTeams = new Set();
 
-// ✅ 自動下一題（預設：全員作答）
-let autoMode = "all"; // off | correct | all
+let autoMode = "all"; 
 let autoTimer = null;
 let questionFinalized = false;
 
@@ -478,16 +481,13 @@ function speak(text){
   speechSynthesis.speak(u);
 }
 
-/* ================== 建題（依回數） ================== */
+/* ================== 建題 ================== */
 function buildGameBank(){
   MASTER_WORDS = uniq(MASTER_WORDS);
-
   if(MASTER_WORDS.length < OPTIONS_PER_QUESTION){
     alert(`題庫不足 ${OPTIONS_PER_QUESTION} 個單字，請在題庫加入更多單字。`);
     return false;
   }
-
-  // 回數可能 > 題庫數：允許答案重複（盡量打散）
   const pool = shuffle([...MASTER_WORDS]);
   const answers = [];
   for(let i=0;i<TOTAL_QUESTIONS;i++){
@@ -506,7 +506,7 @@ function buildGameBank(){
   return true;
 }
 
-/* ================== 顯示正確答案（亮框） ================== */
+/* ================== 顯示答案 ================== */
 function revealCorrectAnswer(){
   const q = gameBank[currentIdx];
   if(!q) return;
@@ -523,7 +523,6 @@ function revealCorrectAnswer(){
   }
 }
 
-/* ================== 本題結束 + 自動下一題排程 ================== */
 function finalizeQuestionAndMaybeAutoNext(){
   if(questionFinalized) return;
   questionFinalized = true;
@@ -536,7 +535,6 @@ function finalizeQuestionAndMaybeAutoNext(){
   }
 }
 
-/* ================== 下一題 ================== */
 function nextQuestion(){
   if(gameEnded) return;
   clearAutoTimer();
@@ -545,7 +543,7 @@ function nextQuestion(){
   updateUI();
 }
 
-/* ================== 結果排行（並列名次） ================== */
+/* ================== 結果排行 ================== */
 function showResults(){
   const overlay = document.getElementById("resultOverlay");
   const podium = document.getElementById("podium");
@@ -557,7 +555,6 @@ function showResults(){
   }
   standings.sort((a,b)=> (b.score - a.score) || (a.team - b.team));
 
-  // 並列名次
   const ranks = [];
   for(let i=0;i<standings.length;i++){
     if(i===0){ ranks[i]=1; continue; }
@@ -573,11 +570,9 @@ function showResults(){
   for(let i=0;i<standings.length;i++){
     const r = ranks[i];
     if(!allowedRanks.has(r)) continue;
-
     const s = standings[i];
     const tied = (i>0 && ranks[i]===ranks[i-1] && standings[i].score===standings[i-1].score)
               || standings.some((x, idx)=> idx!==i && ranks[idx]===r && x.score===s.score);
-
     const label = (labelByRank[r] || `第${r}名隊伍`) + (tied ? "（並列）" : "");
 
     const item = document.createElement("div");
@@ -601,20 +596,16 @@ function showResults(){
   overlay.style.display = "flex";
 }
 
-/* ================== 遊戲初始化 ================== */
 function initGame(){
   if(!buildGameBank()) return;
-
   currentIdx = 0;
   isShowWord = false;
   gameEnded = false;
-
   renderBattleGround();
   updateUI();
   updateBankCount();
 }
 
-/* ================== 畫面渲染 ================== */
 function renderBattleGround(){
   const bg = document.getElementById("battleGround");
   bg.innerHTML = "";
@@ -627,7 +618,6 @@ function renderBattleGround(){
     const div = document.createElement("div");
     div.className = "comic-box team-container";
     div.style.background = teamBg[i];
-
     div.innerHTML = `
       <div class="team-info" style="color:${teamColor[i]}">
         <span>TEAM ${i+1}</span>
@@ -640,20 +630,14 @@ function renderBattleGround(){
 }
 
 function updateUI(){
-  if(gameEnded){
-    showResults();
-    return;
-  }
-  if(currentIdx >= gameBank.length){
-    gameEnded = true;
-    showResults();
-    return;
-  }
+  if(gameEnded){ showResults(); return; }
+  if(currentIdx >= gameBank.length){ gameEnded = true; showResults(); return; }
 
   clearAutoTimer();
   questionFinalized = false;
 
   answeredTeams = new Set();
+  missedTeams = new Set(); // 重置本題失誤紀錄
   correctRank = 0;
   clearLocks();
 
@@ -672,7 +656,6 @@ function updateUI(){
   for(let t=0;t<teamCount;t++){
     const list = document.getElementById(`list-${t}`);
     list.innerHTML = "";
-
     const opts = shuffle([...q.options]);
     for(const opt of opts){
       const item = document.createElement("div");
@@ -682,39 +665,62 @@ function updateUI(){
       list.appendChild(item);
     }
   }
-
   speak();
 }
 
-/* ================== 作答（每隊每題只能一次） ================== */
+/* ================== 作答邏輯（修改處） ================== */
 function checkAnswer(teamIdx, pick, ans, el){
   if(gameEnded) return;
+  
+  // 如果這隊已經「答對並鎖定」，就不動作
   if(answeredTeams.has(teamIdx)) return;
 
-  answeredTeams.add(teamIdx);
-  lockTeam(teamIdx);
+  // 如果這個按鈕已經被判定過（已錯或已對），就不動作
+  if(el.classList.contains("wrong") || el.classList.contains("correct")) return;
 
   const isCorrect = (pick.toLowerCase() === ans.toLowerCase());
 
   if(isCorrect){
+    // === 答對 ===
     el.classList.add("correct");
 
-    const pts = RACE_POINTS[correctRank] ?? 0;
-    correctRank = Math.min(correctRank + 1, RACE_POINTS.length);
+    // 只有「之前沒選錯過」的人，才有資格拿這題的 Ranking 分數
+    if(!missedTeams.has(teamIdx)){
+      const pts = RACE_POINTS[correctRank] ?? 0;
+      correctRank++; // 佔用一個名次
+      teamScores[teamIdx] = (teamScores[teamIdx] || 0) + pts;
+    } else {
+      // 之前錯過，雖然現在對了，但不加 Ranking 分數（得分不變）
+      // 但也不會再扣分，就只是算「完成了」
+    }
 
-    teamScores[teamIdx] = (teamScores[teamIdx] || 0) + pts;
     document.getElementById(`score-${teamIdx}`).textContent = teamScores[teamIdx];
     speak(ans);
+
+    // 標記這隊已完成 -> 鎖定整隊
+    answeredTeams.add(teamIdx);
+    lockTeam(teamIdx);
 
     if(autoMode === "correct"){
       finalizeQuestionAndMaybeAutoNext();
     }
+
   }else{
+    // === 答錯 ===
     el.classList.add("wrong");
+    
+    // 標記：這隊這題有失誤過，之後答對也不會加分
+    missedTeams.add(teamIdx);
+
+    // 扣分（避免亂按）
     teamScores[teamIdx] = Math.max(0, (teamScores[teamIdx] || 0) - 2);
     document.getElementById(`score-${teamIdx}`).textContent = teamScores[teamIdx];
+
+    // 注意：這裡不呼叫 lockTeam，也不加入 answeredTeams
+    // 讓他們可以繼續點其他還沒變紅的按鈕
   }
 
+  // 檢查是否全員都答對了
   if(autoMode === "all" && answeredTeams.size >= teamCount){
     finalizeQuestionAndMaybeAutoNext();
   }
@@ -731,14 +737,12 @@ document.getElementById("btnEye").onclick = (e)=>{
 };
 document.getElementById("btnNext").onclick = ()=> nextQuestion();
 
-// 對戰人數切換
 document.getElementById("teamSelect").addEventListener("change", (e)=>{
   teamCount = Math.max(1, Math.min(4, parseInt(e.target.value,10) || 3));
   renderBattleGround();
   updateUI();
 });
 
-// 回數 4~20
 const roundSelect = document.getElementById("roundSelect");
 for(let i=4;i<=20;i++){
   const opt = document.createElement("option");
@@ -752,13 +756,11 @@ roundSelect.addEventListener("change", (e)=>{
   initGame();
 });
 
-// 自動下一題模式切換
 document.getElementById("autoSelect").addEventListener("change", (e)=>{
   autoMode = e.target.value || "all";
   clearAutoTimer();
 });
 
-// 題庫設定
 const configOverlay = document.getElementById("configOverlay");
 document.getElementById("btnConfig").onclick = ()=>{
   document.getElementById("wordInput").value = MASTER_WORDS.join(", ");
@@ -775,19 +777,16 @@ document.getElementById("btnApply").onclick = ()=>{
   const raw = document.getElementById("wordInput").value || "";
   const words = raw.split(/[\n,\t ]+/).map(s=>s.trim()).filter(Boolean);
   const clean = uniq(words);
-
   if(clean.length < OPTIONS_PER_QUESTION){
     alert(`請至少輸入 ${OPTIONS_PER_QUESTION} 個單字`);
     return;
   }
-
   MASTER_WORDS = clean;
   teamScores = [0,0,0,0];
   configOverlay.style.display = "none";
   initGame();
 };
 
-// 結果彈窗
 const resultOverlay = document.getElementById("resultOverlay");
 document.getElementById("btnResultClose").onclick = ()=> resultOverlay.style.display = "none";
 document.getElementById("btnRestart").onclick = ()=>{
@@ -796,7 +795,6 @@ document.getElementById("btnRestart").onclick = ()=>{
   initGame();
 };
 
-/* ================== 啟動 ================== */
 updateBankCount();
 initGame();
 </script>
