@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>聽力對戰（無限嘗試+大讚賞版）</title>
+<title>聽力對戰遊戲</title>
 
 <style>
 :root{
@@ -45,6 +45,17 @@ body{
   padding:12px;
   align-items:center;
   flex-wrap:wrap;
+}
+
+/* Logo 樣式 */
+.topbar-logo {
+  height: 80px; 
+  width: auto;
+  object-fit: contain;
+  display: block;
+  @media (max-width: 600px) {
+    height: 60px;
+  }
 }
 
 /* 題目區 */
@@ -332,6 +343,8 @@ body{
 <div class="app">
 
   <div class="comic-box topbar">
+    <img src="image_0.png" alt="KEAT Logo" class="topbar-logo">
+
     <div class="question-zone" id="btnSpeak" title="播放發音">
       <div id="displayArea" class="listen-hint">播放發音</div>
       <button id="btnEye" aria-label="toggle word"
@@ -360,7 +373,7 @@ body{
       <label for="autoSelect">自動</label>
       <select id="autoSelect">
         <option value="off">關閉</option>
-        <option value="correct">答對換下一題</option>
+        <option value="correct">答對就下一題</option>
         <option value="all" selected>全員答對換下一題</option>
       </select>
     </div>
@@ -393,7 +406,7 @@ body{
     </div>
 
     <div style="margin-top:10px; font-size:14px; font-weight:900; color:#334155;">
-      規則：答對者依序獲得 第一(+10)、第二(+8)、第三(+6)、第四(+4)、第五(+2)<br>
+      規則：答對者依序獲得 +10、+8、+6、+4、+2 <br>
       <span style="color:#22c55e;">選錯不扣分，修正後選對依然有分！</span>
     </div>
   </div>
@@ -826,5 +839,18 @@ document.getElementById("btnRestart").onclick = ()=>{
 updateBankCount();
 initGame();
 </script>
+
+
+<script>
+/* ====== 只停用右鍵（不偵測 DevTools） ====== */
+// 停用右鍵選單（滑鼠右鍵 / 手機長按）
+document.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  return false;
+});
+</script>
+
 </body>
 </html>
+
+
